@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +23,7 @@ import { useNavigate } from "react-router-dom";
 interface CartItem {
   id: string;
   quantity: number;
+  price: number; // Add price field to allow overriding
   item: {
     id: string;
     name: string;
@@ -50,6 +52,7 @@ const Cart = () => {
         .select(`
           id,
           quantity,
+          price,
           item:items (
             id,
             name,
@@ -63,7 +66,12 @@ const Cart = () => {
         .eq("user_id", session.session.user.id);
 
       if (error) throw error;
-      return data as CartItem[];
+      
+      // Initialize custom price if not set
+      return (data || []).map(item => ({
+        ...item,
+        price: item.price || item.item.price
+      })) as CartItem[];
     },
   });
 
@@ -72,6 +80,26 @@ const Cart = () => {
       const { error } = await supabase
         .from("cart_items")
         .update({ quantity })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cart-items"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updatePriceMutation = useMutation({
+    mutationFn: async ({ id, price }: { id: string; price: number }) => {
+      const { error } = await supabase
+        .from("cart_items")
+        .update({ price })
         .eq("id", id);
       if (error) throw error;
     },
@@ -114,7 +142,9 @@ const Cart = () => {
   const calculateItemDalali = (cartItem: CartItem, type: "buyer" | "seller") => {
     const { item, quantity } = cartItem;
     const rate = type === "buyer" ? item.buyer_dalali_rate : item.seller_dalali_rate;
-    const amount = item.price * item.weight * quantity;
+    // Use the custom price instead of item price
+    const price = cartItem.price;
+    const amount = price * item.weight * quantity;
 
     if (item.dalali_type === "%") {
       return (rate / 100) * amount;
@@ -129,7 +159,8 @@ const Cart = () => {
 
     return cartItems.reduce(
       (acc, item) => ({
-        total: acc.total + item.item.price * item.item.weight * item.quantity,
+        // Use the custom price for total calculation
+        total: acc.total + item.price * item.item.weight * item.quantity,
         buyerDalali: acc.buyerDalali + calculateItemDalali(item, "buyer"),
         sellerDalali: acc.sellerDalali + calculateItemDalali(item, "seller"),
       }),
@@ -138,6 +169,17 @@ const Cart = () => {
   };
 
   const totals = calculateTotals();
+
+  // Handler for price changes
+  const handlePriceChange = (id: string, newPrice: string) => {
+    // Convert to number with 2 decimal places
+    const price = parseFloat(parseFloat(newPrice).toFixed(2));
+    
+    // Validate price
+    if (isNaN(price) || price <= 0) return;
+    
+    updatePriceMutation.mutate({ id, price });
+  };
 
   if (isLoading) {
     return (
@@ -187,7 +229,21 @@ const Cart = () => {
                 cartItems.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{item.item.name}</TableCell>
-                    <TableCell>₹{item.item.price}</TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={item.price}
+                        onChange={(e) => {
+                          const price = e.target.value;
+                          if (parseFloat(price) > 0) {
+                            handlePriceChange(item.id, price);
+                          }
+                        }}
+                        className="w-24"
+                      />
+                    </TableCell>
                     <TableCell>{item.item.weight}</TableCell>
                     <TableCell>
                       <Input

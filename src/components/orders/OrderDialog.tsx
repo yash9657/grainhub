@@ -47,6 +47,7 @@ interface OrderDialogProps {
   cartItems: Array<{
     id: string;
     quantity: number;
+    price: number; // Add price field to use custom price
     item: {
       id: string;
       name: string;
@@ -106,9 +107,10 @@ export function OrderDialog({ open, onOpenChange, cartItems, totals }: OrderDial
   const sellers = stakeholders?.filter((s) => s.type === "seller") || [];
 
   const calculateItemDalali = (cartItem: OrderDialogProps["cartItems"][0], type: "buyer" | "seller") => {
-    const { item, quantity } = cartItem;
+    const { item, quantity, price } = cartItem;
     const rate = type === "buyer" ? item.buyer_dalali_rate : item.seller_dalali_rate;
-    const amount = item.price * item.weight * quantity;
+    // Use custom price for calculations
+    const amount = price * item.weight * quantity;
 
     if (item.dalali_type === "%") {
       return (rate / 100) * amount;
@@ -152,12 +154,12 @@ export function OrderDialog({ open, onOpenChange, cartItems, totals }: OrderDial
 
       if (orderError) throw orderError;
 
-      // Create order items with normalized dalali_type
+      // Create order items with normalized dalali_type and custom price
       const orderItems = cartItems.map((item) => ({
         order_id: order.id,
         item_id: item.item.id,
         quantity: item.quantity,
-        price: item.item.price,
+        price: item.price, // Use the custom price
         weight: item.item.weight,
         dalali_type: item.item.dalali_type === "Per Quintal" ? "Q" : "%", // Normalize to ensure only valid values
         buyer_dalali_rate: item.item.buyer_dalali_rate,

@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,11 @@ const Items = () => {
           className="max-w-md"
         />
 
-        <ItemsTable items={items || []} isLoading={isLoading} />
+        <ItemsTable 
+          items={items || []} 
+          isLoading={isLoading} 
+          onItemUpdated={refetch}
+        />
 
         <AddItemDialog
           open={isAddItemOpen}
