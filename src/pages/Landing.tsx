@@ -61,7 +61,7 @@ const Landing = () => {
                 The ultimate commission tracking solution for grain business brokers. Manage your buyers,
                 sellers, and commissions all in one place.
               </p>
-              <div className="mt-10">
+              <div className="mt-10 flex flex-col items-center gap-5">
                 <Link
                   to="/signup"
                   className="inline-flex items-center px-6 py-3 rounded-lg bg-primary text-white transition-all hover:bg-primary/90"
@@ -69,6 +69,19 @@ const Landing = () => {
                   Start Now
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
+                <a
+                  href="https://www.producthunt.com/posts/grainbroker-hub?embed=true&utm_source=badge-featured&utm_medium=badge&utm_souce=badge-grainbroker‑hub"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <img
+                    src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=934120&theme=light&t=1740976768104"
+                    alt="Grainbroker Hub - Commission tracking solution for grain business brokers | Product Hunt"
+                    style={{ width: "250px", height: "54px" }}
+                    width={250}
+                    height={54}
+                  />
+                </a>
               </div>
             </motion.div>
           </div>
