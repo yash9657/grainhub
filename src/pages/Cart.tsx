@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/Layout";
@@ -19,11 +19,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OrderDialog } from "@/components/orders/OrderDialog";
 import { useNavigate } from "react-router-dom";
+import { useDebounceFn } from "@/hooks/use-debounce";
 
 interface CartItem {
   id: string;
   quantity: number;
-  price: number; // Add price field to allow overriding
+  price: number;
   item: {
     id: string;
     name: string;
@@ -37,43 +38,11 @@ interface CartItem {
 
 const Cart = () => {
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
+  const [localItemValues, setLocalItemValues] = useState<Record<string, { price: string; quantity: string }>>({});
+  const inputRefs = useRef<Record<string, { price: HTMLInputElement | null; quantity: HTMLInputElement | null }>>({});
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-
-  const { data: cartItems, isLoading } = useQuery({
-    queryKey: ["cart-items"],
-    queryFn: async () => {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session?.user.id) throw new Error("No user found");
-
-      const { data, error } = await supabase
-        .from("cart_items")
-        .select(`
-          id,
-          quantity,
-          price,
-          item:items (
-            id,
-            name,
-            price,
-            weight,
-            dalali_type,
-            buyer_dalali_rate,
-            seller_dalali_rate
-          )
-        `)
-        .eq("user_id", session.session.user.id);
-
-      if (error) throw error;
-      
-      // Initialize custom price if not set
-      return (data || []).map(item => ({
-        ...item,
-        price: item.price || item.item.price
-      })) as CartItem[];
-    },
-  });
 
   const updateQuantityMutation = useMutation({
     mutationFn: async ({ id, quantity }: { id: string; quantity: number }) => {
@@ -115,6 +84,78 @@ const Cart = () => {
     },
   });
 
+  const debouncedUpdateQuantity = useDebounceFn((id: string, quantity: number) => {
+    updateQuantityMutation.mutate({ id, quantity });
+  }, 800);
+
+  const debouncedUpdatePrice = useDebounceFn((id: string, price: number) => {
+    updatePriceMutation.mutate({ id, price });
+  }, 800);
+
+  const { data: cartItems, isLoading } = useQuery({
+    queryKey: ["cart-items"],
+    queryFn: async () => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.user.id) throw new Error("No user found");
+
+      const { data, error } = await supabase
+        .from("cart_items")
+        .select(`
+          id,
+          quantity,
+          price,
+          item:items (
+            id,
+            name,
+            price,
+            weight,
+            dalali_type,
+            buyer_dalali_rate,
+            seller_dalali_rate
+          )
+        `)
+        .eq("user_id", session.session.user.id);
+
+      if (error) throw error;
+      
+      const items = (data || []).map(item => ({
+        ...item,
+        price: item.price || item.item.price
+      })) as CartItem[];
+      
+      const newLocalValues: Record<string, { price: string; quantity: string }> = {};
+      items.forEach(item => {
+        newLocalValues[item.id] = {
+          price: item.price.toFixed(2),
+          quantity: item.quantity.toString()
+        };
+      });
+      
+      setLocalItemValues(prev => {
+        const merged = {...prev};
+        
+        Object.keys(newLocalValues).forEach(id => {
+          const priceInput = inputRefs.current[id]?.price;
+          const quantityInput = inputRefs.current[id]?.quantity;
+          
+          if (!priceInput?.matches(':focus')) {
+            merged[id] = merged[id] || { price: "0.00", quantity: "1" };
+            merged[id].price = newLocalValues[id].price;
+          }
+          
+          if (!quantityInput?.matches(':focus')) {
+            merged[id] = merged[id] || { price: "0.00", quantity: "1" };
+            merged[id].quantity = newLocalValues[id].quantity;
+          }
+        });
+        
+        return merged;
+      });
+      
+      return items;
+    },
+  });
+
   const removeItemMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -142,14 +183,12 @@ const Cart = () => {
   const calculateItemDalali = (cartItem: CartItem, type: "buyer" | "seller") => {
     const { item, quantity } = cartItem;
     const rate = type === "buyer" ? item.buyer_dalali_rate : item.seller_dalali_rate;
-    // Use the custom price instead of item price
     const price = cartItem.price;
     const amount = price * item.weight * quantity;
 
     if (item.dalali_type === "%") {
       return (rate / 100) * amount;
     } else {
-      // Per Quintal calculation
       return (rate * item.weight * quantity) / 100;
     }
   };
@@ -159,7 +198,6 @@ const Cart = () => {
 
     return cartItems.reduce(
       (acc, item) => ({
-        // Use the custom price for total calculation
         total: acc.total + item.price * item.item.weight * item.quantity,
         buyerDalali: acc.buyerDalali + calculateItemDalali(item, "buyer"),
         sellerDalali: acc.sellerDalali + calculateItemDalali(item, "seller"),
@@ -170,15 +208,35 @@ const Cart = () => {
 
   const totals = calculateTotals();
 
-  // Handler for price changes
-  const handlePriceChange = (id: string, newPrice: string) => {
-    // Convert to number with 2 decimal places
-    const price = parseFloat(parseFloat(newPrice).toFixed(2));
+  const handleInputChange = (id: string, field: 'price' | 'quantity', value: string) => {
+    let isValid = false;
+    let formattedValue = value;
     
-    // Validate price
-    if (isNaN(price) || price <= 0) return;
+    if (field === 'price') {
+      isValid = /^\d*\.?\d{0,2}$/.test(value);
+      if (value === '') formattedValue = '0.00';
+    } else {
+      isValid = /^\d+$/.test(value);
+      if (value === '') formattedValue = '1';
+    }
     
-    updatePriceMutation.mutate({ id, price });
+    if (isValid) {
+      setLocalItemValues(prev => {
+        const newValues = {...prev};
+        if (!newValues[id]) {
+          newValues[id] = { price: "0.00", quantity: "1" };
+        }
+        newValues[id][field] = formattedValue;
+        return newValues;
+      });
+
+      const numValue = parseFloat(formattedValue || '0');
+      if (field === 'price' && numValue > 0) {
+        debouncedUpdatePrice(id, numValue);
+      } else if (field === 'quantity' && numValue > 0) {
+        debouncedUpdateQuantity(id, numValue);
+      }
+    }
   };
 
   if (isLoading) {
@@ -231,34 +289,26 @@ const Cart = () => {
                     <TableCell>{item.item.name}</TableCell>
                     <TableCell>
                       <Input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        value={item.price}
-                        onChange={(e) => {
-                          const price = e.target.value;
-                          if (parseFloat(price) > 0) {
-                            handlePriceChange(item.id, price);
-                          }
+                        ref={el => {
+                          if (!inputRefs.current[item.id]) inputRefs.current[item.id] = { price: null, quantity: null };
+                          inputRefs.current[item.id].price = el;
                         }}
+                        type="text"
+                        value={localItemValues[item.id]?.price || item.price.toFixed(2)}
+                        onChange={(e) => handleInputChange(item.id, 'price', e.target.value)}
                         className="w-24"
                       />
                     </TableCell>
                     <TableCell>{item.item.weight}</TableCell>
                     <TableCell>
                       <Input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => {
-                          const quantity = parseInt(e.target.value);
-                          if (quantity > 0) {
-                            updateQuantityMutation.mutate({
-                              id: item.id,
-                              quantity,
-                            });
-                          }
+                        ref={el => {
+                          if (!inputRefs.current[item.id]) inputRefs.current[item.id] = { price: null, quantity: null };
+                          inputRefs.current[item.id].quantity = el;
                         }}
+                        type="text"
+                        value={localItemValues[item.id]?.quantity || item.quantity.toString()}
+                        onChange={(e) => handleInputChange(item.id, 'quantity', e.target.value)}
                         className="w-20"
                       />
                     </TableCell>
