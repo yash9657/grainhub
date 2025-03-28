@@ -155,6 +155,111 @@ const StakeholderProfile = () => {
     },
   });
 
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      console.log("Starting deletion process for order:", orderId);
+      
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.user.id) {
+        throw new Error("No user found");
+      }
+      
+      // First, get the order details to know which stakeholders are involved
+      const { data: orderData, error: fetchError } = await supabase
+        .from("orders")
+        .select("buyer_id, seller_id, id")
+        .eq("id", orderId)
+        .single();
+        
+      if (fetchError) {
+        console.error("Error fetching order details:", fetchError);
+        throw new Error(`Failed to fetch order details: ${fetchError.message}`);
+      }
+      
+      if (!orderData) {
+        throw new Error("Order not found");
+      }
+      
+      console.log("Found order:", orderData);
+      
+      try {
+        // Delete order items first
+        const { error: itemsError } = await supabase
+          .from("order_items")
+          .delete()
+          .eq("order_id", orderId);
+        
+        if (itemsError) {
+          console.error("Error deleting order items:", itemsError);
+          throw new Error(`Failed to delete order items: ${itemsError.message}`);
+        }
+        
+        console.log("Successfully deleted order items");
+        
+        // Then delete the main order
+        const { error: orderError } = await supabase
+          .from("orders")
+          .delete()
+          .eq("id", orderId);
+        
+        if (orderError) {
+          console.error("Error deleting order:", orderError);
+          throw new Error(`Failed to delete order: ${orderError.message}`);
+        }
+        
+        console.log("Successfully deleted order");
+        
+        // Return stakeholder IDs for query invalidation
+        return { 
+          success: true, 
+          buyerId: orderData.buyer_id,
+          sellerId: orderData.seller_id,
+          orderId: orderData.id
+        };
+      } catch (error: any) {
+        console.error("Error in deletion process:", error);
+        throw error;
+      }
+    },
+    onSuccess: (result) => {
+      console.log("Delete mutation successful:", result);
+      
+      // Clear selected order if it was the one deleted
+      if (selectedOrder === result.orderId) {
+        setSelectedOrder(null);
+      }
+      
+      // Invalidate relevant queries to update UI
+      console.log("Invalidating queries for both buyer and seller");
+      queryClient.invalidateQueries({ queryKey: ["stakeholder-orders"] });
+      
+      // Also invalidate specific stakeholder queries to ensure their pages update
+      if (result.buyerId) {
+        queryClient.invalidateQueries({ queryKey: ["stakeholder-orders", result.buyerId] });
+      }
+      
+      if (result.sellerId) {
+        queryClient.invalidateQueries({ queryKey: ["stakeholder-orders", result.sellerId] });
+      }
+      
+      // Show success toast
+      toast({
+        title: "Order Deleted",
+        description: "The order has been successfully deleted",
+      });
+    },
+    onError: (error: any) => {
+      console.error("Delete mutation error:", error);
+      
+      // Show detailed error message to help debugging
+      toast({
+        title: "Error Deleting Order",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleBillPaidChange = (orderId: string, billPaid: boolean) => {
     updateOrderBillPaidMutation.mutate({ orderId, billPaid });
   };
@@ -196,6 +301,19 @@ const StakeholderProfile = () => {
       return;
     }
     setShowInvoice(true);
+  };
+
+  const handleDeleteOrder = (orderId: string) => {
+    console.log("Delete requested for order:", orderId);
+    if (orderId) {
+      deleteOrderMutation.mutate(orderId);
+    } else {
+      toast({
+        title: "Error",
+        description: "Invalid order ID",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoadingStakeholder) {
@@ -331,6 +449,7 @@ const StakeholderProfile = () => {
           order={selectedOrderData}
           orderItems={selectedOrderItems || []}
           stakeholderType={stakeholder.type}
+          onDeleteOrder={handleDeleteOrder}
         />
 
         {showInvoice && (
