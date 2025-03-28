@@ -33,17 +33,17 @@ const Dashboard = () => {
     queryFn: async () => {
       const startDate = startOfMonth(new Date()).toISOString();
       const endDate = endOfMonth(new Date()).toISOString();
-
+  
       const { data: session } = await supabase.auth.getSession();
       if (!session.session?.user.id) throw new Error("No user found");
-
+  
       const { data, error } = await supabase
         .from("orders")
         .select("buyer_dalali, seller_dalali")
         .gte("created_at", startDate)
         .lte("created_at", endDate)
         .eq("user_id", session.session.user.id);
-
+  
       if (error) {
         toast({
           title: "Error fetching dalali statistics",
@@ -52,7 +52,7 @@ const Dashboard = () => {
         });
         return { buyerDalali: 0, sellerDalali: 0 };
       }
-
+  
       const totals = data.reduce(
         (acc, order) => ({
           buyerDalali: acc.buyerDalali + Number(order.buyer_dalali || 0),
@@ -60,10 +60,15 @@ const Dashboard = () => {
         }),
         { buyerDalali: 0, sellerDalali: 0 }
       );
-
+  
       return totals;
     },
+    staleTime: 300000, // Data is fresh for 5 minutes
+    gcTime: 600000, // Data stays in cache for 10 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    retry: 3,
   });
+  
 
   // Fetch categories
   const { data: categories } = useQuery({
@@ -85,6 +90,9 @@ const Dashboard = () => {
 
       return data;
     },
+    staleTime: 30 * 60 * 1000, // Consider data fresh for 30 minutes
+    gcTime: 60 * 60 * 1000, // Keep in cache for 1 hour
+    refetchOnWindowFocus: false,
   });
 
   // Fetch cart items count - updated to count unique items

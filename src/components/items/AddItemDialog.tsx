@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
 interface AddItemDialogProps {
@@ -21,6 +21,8 @@ export function AddItemDialog({ open, onOpenChange, onSuccess }: AddItemDialogPr
   const [selectedCategory, setSelectedCategory] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const { toast } = useToast();
+
+  const queryClient = useQueryClient();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -73,6 +75,9 @@ export function AddItemDialog({ open, onOpenChange, onSuccess }: AddItemDialogPr
 
         if (categoryError) throw categoryError;
         categoryId = newCategoryData.id;
+
+        // Invalidate the categories query to refetch updated categories
+        queryClient.invalidateQueries({ queryKey: ["categories"] });
       }
 
       let imageUrl = null;
