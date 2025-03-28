@@ -241,6 +241,8 @@ const StakeholderProfile = () => {
       if (result.sellerId) {
         queryClient.invalidateQueries({ queryKey: ["stakeholder-orders", result.sellerId] });
       }
+
+      queryClient.invalidateQueries({ queryKey: ["monthly-dalali"] });
       
       // Show success toast
       toast({
