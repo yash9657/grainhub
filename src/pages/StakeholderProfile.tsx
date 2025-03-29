@@ -49,6 +49,8 @@ const StakeholderProfile = () => {
       if (error) throw error;
       return data;
     },
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
   });
 
   const { data: profile } = useQuery({
@@ -66,6 +68,8 @@ const StakeholderProfile = () => {
       if (error) throw error;
       return data;
     },
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
   });
 
   const { data: orders, isLoading: isLoadingOrders } = useQuery({

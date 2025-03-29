@@ -5,18 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { useAuth } from "@/contexts/AuthContext";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import CompleteProfile from "./pages/CompleteProfile";
-import NotFound from "./pages/NotFound";
-import Dashboard from "./pages/Dashboard";
-import Items from "./pages/Items";
-import Buyers from "./pages/Buyers";
-import Sellers from "./pages/Sellers";
-import Profile from "./pages/Profile";
-import StakeholderProfile from "./pages/StakeholderProfile";
-import Cart from "./pages/Cart";
+import { lazy, Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,10 +16,31 @@ const queryClient = new QueryClient({
   },
 });
 
+// Lazy load components
+const Landing = lazy(() => import("./pages/Landing"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Items = lazy(() => import("./pages/Items"));
+const Buyers = lazy(() => import("./pages/Buyers"));
+const Sellers = lazy(() => import("./pages/Sellers"));
+const Profile = lazy(() => import("./pages/Profile"));
+const StakeholderProfile = lazy(() => import("./pages/StakeholderProfile"));
+const Cart = lazy(() => import("./pages/Cart"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="container mx-auto p-4">
+    <Skeleton className="h-[500px] w-full rounded-lg" />
+  </div>
+);
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
   
-  if (loading) return null;
+  if (loading) return <LoadingFallback />;
   
   if (!session) {
     return <Navigate to="/login" />;
@@ -46,75 +57,87 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/complete-profile" element={<CompleteProfile />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
+            <Route path="/" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <Landing />
+              </Suspense>
+            } />
+            <Route path="/login" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <Login />
+              </Suspense>
+            } />
+            <Route path="/signup" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <Signup />
+              </Suspense>
+            } />
+            <Route path="/complete-profile" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <CompleteProfile />
+              </Suspense>
+            } />
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <Suspense fallback={<LoadingFallback />}>
                   <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/items"
-              element={
-                <ProtectedRoute>
+                </Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/items" element={
+              <ProtectedRoute>
+                <Suspense fallback={<LoadingFallback />}>
                   <Items />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/buyers"
-              element={
-                <ProtectedRoute>
+                </Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/buyers" element={
+              <ProtectedRoute>
+                <Suspense fallback={<LoadingFallback />}>
                   <Buyers />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/sellers"
-              element={
-                <ProtectedRoute>
+                </Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/sellers" element={
+              <ProtectedRoute>
+                <Suspense fallback={<LoadingFallback />}>
                   <Sellers />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/buyers/:id"
-              element={
-                <ProtectedRoute>
+                </Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/buyers/:id" element={
+              <ProtectedRoute>
+                <Suspense fallback={<LoadingFallback />}>
                   <StakeholderProfile />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/sellers/:id"
-              element={
-                <ProtectedRoute>
+                </Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/sellers/:id" element={
+              <ProtectedRoute>
+                <Suspense fallback={<LoadingFallback />}>
                   <StakeholderProfile />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute>
+                </Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <Suspense fallback={<LoadingFallback />}>
                   <Profile />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/cart"
-              element={
-                <ProtectedRoute>
+                </Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/cart" element={
+              <ProtectedRoute>
+                <Suspense fallback={<LoadingFallback />}>
                   <Cart />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<NotFound />} />
+                </Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="*" element={
+              <Suspense fallback={<LoadingFallback />}>
+                <NotFound />
+              </Suspense>
+            } />
           </Routes>
         </AuthProvider>
       </BrowserRouter>
