@@ -216,28 +216,32 @@ const Cart = () => {
       isValid = /^\d*\.?\d{0,2}$/.test(value);
       if (value === '') formattedValue = '0.00';
     } else {
-      isValid = /^\d+$/.test(value);
-      if (value === '') formattedValue = '1';
+      // Allow empty string by matching 0 or more digits.
+      isValid = /^\d*$/.test(value);
+      // Do not force the empty string to "1" here.
     }
     
     if (isValid) {
       setLocalItemValues(prev => {
-        const newValues = {...prev};
+        const newValues = { ...prev };
         if (!newValues[id]) {
+          // Initialize with default values if not set.
           newValues[id] = { price: "0.00", quantity: "1" };
         }
         newValues[id][field] = formattedValue;
         return newValues;
       });
-
+  
+      // Only update backend if the field is not empty.
       const numValue = parseFloat(formattedValue || '0');
       if (field === 'price' && numValue > 0) {
         debouncedUpdatePrice(id, numValue);
-      } else if (field === 'quantity' && numValue > 0) {
+      } else if (field === 'quantity' && formattedValue !== '' && numValue > 0) {
         debouncedUpdateQuantity(id, numValue);
       }
     }
   };
+  
 
   if (isLoading) {
     return (
@@ -303,12 +307,21 @@ const Cart = () => {
                     <TableCell>
                       <Input
                         ref={el => {
-                          if (!inputRefs.current[item.id]) inputRefs.current[item.id] = { price: null, quantity: null };
+                          if (!inputRefs.current[item.id]) {
+                            inputRefs.current[item.id] = { price: null, quantity: null };
+                          }
                           inputRefs.current[item.id].quantity = el;
                         }}
                         type="text"
-                        value={localItemValues[item.id]?.quantity || item.quantity.toString()}
+                        // Use a ternary to check if the local value exists (even if empty string) rather than using || which treats '' as falsy.
+                        value={localItemValues[item.id] !== undefined ? localItemValues[item.id].quantity : item.quantity.toString()}
                         onChange={(e) => handleInputChange(item.id, 'quantity', e.target.value)}
+                        onBlur={(e) => {
+                          if (e.target.value === '') {
+                            // On blur, if the field is empty, reset it to "1".
+                            handleInputChange(item.id, 'quantity', '1');
+                          }
+                        }}
                         className="w-20"
                       />
                     </TableCell>
